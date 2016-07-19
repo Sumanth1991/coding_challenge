@@ -1,8 +1,12 @@
 # coding_challenge
+#################################################
+Please using crypto++ for this code to work. 
+################################################
 
-#PLease using crypto++ for this code to work. 
+#################################################
+PS note this is the first time ever I have used encryption
+#################################################
 
-# PS note this is the first time ever I have used encryption
 
 
 1. Since Caplinked works on data security, I did some research on encryption and thought of implementing two encrytion method namely AES and tripleDEs for this challenge 
