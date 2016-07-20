@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <cryptopp/modes.h>
 #include <cryptopp/aes.h>
+#include <cryptopp/files.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/rdrand.h>
 #include <cryptopp/osrng.h>
@@ -35,29 +36,48 @@ class Aesencryption
 public:
   virtual char const * encryptdecrypt()
   {
+	  const char *inputFileName = "plain.txt";
+	  const char *cipherFileName = "cipher.dat";
+	  const char *outputFileName = "Plain2.txt";
 
-        AutoSeededRandomPool rnd;
-	  	char recovered []= "";
-	  	char cipher []= "";
+	  // Create text file
 
-	  	SecByteBlock key(0x00, AES::DEFAULT_KEYLENGTH);
-	  	rnd.GenerateBlock( key, key.size() );
+	  ofstream plain;
+	  plain.open(inputFileName);
+	  plain << "I can do it .\n";
+	  plain << "I bet you can.\n";
+	  plain.close();
 
-	  	byte iv[AES::BLOCKSIZE];
-	  	rnd.GenerateBlock(iv, AES::BLOCKSIZE);
+	  //Create Key and IV
 
-	  	char plainText[] = "Hello! How are you?";
-	  	int messageLen = (int)strlen(plainText) + 1;
+      AutoSeededRandomPool rnd;
+	  SecByteBlock key(0x00, AES::DEFAULT_KEYLENGTH);
+	  rnd.GenerateBlock( key, key.size() );
 
-	  	CFB_Mode<AES>::Encryption cfbEncryption(key, key.size(), iv);
-	  	cfbEncryption.ProcessData((byte*)cipher, (byte*)plainText, messageLen);
+	  byte iv[AES::BLOCKSIZE];
+	  rnd.GenerateBlock(iv, AES::BLOCKSIZE);
 
-	  	cout << "cipher text: " << cipher << endl;
+      //AES Encryption
 
-	  	CFB_Mode<AES>::Decryption cfbDecryption(key, key.size(), iv);
-	  	cfbDecryption.ProcessData((byte*)recovered, (byte*)cipher, messageLen);
+	  CFB_Mode<AES>::Encryption cfbEncryption(key, key.size(), iv);
+	  StreamTransformationFilter *encryptor;
+	  encryptor = new StreamTransformationFilter(cfbEncryption,new FileSink(cipherFileName) );
+	  encryptor->Put(iv, 16);
+	  FileSource(inputFileName, true, encryptor);
 
-	  	cout << "plain text: " << plainText << endl;
+      //AES Dencryption
+
+	  CFB_Mode<AES>::Decryption cfbDecryption(key, key.size(), iv);
+	  StreamTransformationFilter *decryptor;
+	  decryptor = new StreamTransformationFilter(cfbDecryption, new FileSink(outputFileName));
+
+	  char garbage[16], iv_garbage[16];
+	  ifstream inf;
+	  inf.open(cipherFileName); inf.read(iv_garbage, 16);
+	  cfbDecryption.ProcessData((byte *)garbage, (const byte *)iv_garbage,16);
+	  FileSource(inf, true, decryptor);
+	  inf.close();
+
 
     return "This is Aesencryption";
   }
@@ -70,28 +90,79 @@ class Desencryption
 public:
   virtual char const * encryptdecrypt()
   {
-	   AutoSeededRandomPool rnd;
-	  	char recovered []= "";
-	  	char cipher []= "";
+	  const char *inputFileName = "DES_plain.txt";
+	  const char *cipherFileName = "DES_cipher.dat";
+	  const char *outputFileName = "DES_Plain2.txt";
 
-	  	SecByteBlock key(0x00, AES::DEFAULT_KEYLENGTH);
-	  	rnd.GenerateBlock( key, key.size() );
+	  // Create test plaintext file
 
-	  	byte iv[AES::BLOCKSIZE];
-	  	rnd.GenerateBlock(iv, AES::BLOCKSIZE);
+	  ofstream plain;
+	  plain.open(inputFileName);
+	  plain << "I can do it .\n";
+	  plain << "I bet you can.\n";
+	  plain.close();
 
-	  	char plainText[] = "Hello! How are you today? ";
-	  	int messageLen = (int)strlen(plainText) + 1;
+	  AutoSeededRandomPool prng;
 
-	  	CFB_Mode<AES>::Encryption cfbEncryption(key, key.size(), iv);
-	  	cfbEncryption.ProcessData((byte*)cipher, (byte*)plainText, messageLen);
+	  // Create Key and IV
 
-	  	cout << "cipher text: " << cipher << endl;
+	  SecByteBlock key(0x00, DES_EDE2::DEFAULT_KEYLENGTH);
+	  prng.GenerateBlock(key, key.size());
 
-	  	CFB_Mode<AES>::Decryption cfbDecryption(key, key.size(), iv);
-	  	cfbDecryption.ProcessData((byte*)recovered, (byte*)cipher, messageLen);
+	  byte iv[DES_EDE2::BLOCKSIZE];
+	  prng.GenerateBlock(iv, sizeof(iv));
 
-	  	cout << "plain text:" << plainText << endl;
+	  //Triple DES Encryption
+
+	  try
+	  {
+
+	      CBC_Mode< DES_EDE2 >::Encryption e;
+	      e.SetKeyWithIV(key, key.size(), iv);
+
+	      StreamTransformationFilter *encryptor;
+	      	  	   encryptor = new StreamTransformationFilter(e,
+	      	  	     new FileSink(cipherFileName) );
+	      	  	 encryptor->Put(iv, 16);
+	      	     FileSource(inputFileName, true, encryptor);
+	  }
+
+	  catch(const CryptoPP::Exception& e)
+	  {
+	      cerr << e.what() << endl;
+	      exit(1);
+	  }
+
+
+	  //Triple DES DEncryption
+
+	  try
+      {
+		  CBC_Mode< DES_EDE2 >::Decryption d;
+		  d.SetKeyWithIV(key, key.size(), iv);
+
+		  StreamTransformationFilter *decryptor;
+
+		  decryptor = new StreamTransformationFilter(d, new
+	     	  	 FileSink(outputFileName));
+
+
+		  char garbage[16], iv_garbage[16]; // place for IV stuff
+
+		  ifstream inf;
+	      inf.open(cipherFileName); inf.read(iv_garbage, 16); // absorb random prefix
+
+	      d.ProcessData((byte *)garbage, (const byte *)iv_garbage,16);
+	      FileSource(inf, true, decryptor);
+	      inf.close();
+
+	     }
+	  catch(const CryptoPP::Exception& e)
+	  {
+		  cerr << e.what() << endl;
+		  exit(1);
+	  }
+
     return "This is Desencryption" ;
   }
 
@@ -101,6 +172,7 @@ public:
 extern "C"
 void Init_encrypt(void)
 {
+
   RUBY_TRY
   {
     define_class<Encrypt>("encrypt")
